@@ -11,7 +11,7 @@ const SAMPLE_TEXTS = [
   {
     id: 2,
     title: "Исследование океана",
-    text: "Глубоко под поверхностью океана лежит мир тайн и чудес. Морские ученые открывают новые виды и экосистемы, которые бросают вызов нашему пониманию жизни на Земле. Глубокое море остается одним из наиболее изученных рубежей на нашей планете."
+    text: "Глубоко под поверхностью океана лежит мир тайн и чудес. Морские ученые открывают новые виды и экосистемы, которые бросают вызов нашему пониманию жизни на Земле. Глубокое море остается одним из наи��олее изученных рубежей на нашей планете."
   },
   {
     id: 3,
@@ -21,7 +21,7 @@ const SAMPLE_TEXTS = [
   {
     id: 4,
     title: "Изменение климата",
-    text: "Глобальные температуры продолжают расти, влияя на экосистемы по всему миру. Ученые предупреждают, что необходимы немедленные действия для предотвращения необратимого ущерба нашей планете. Внедрение возобновляемых источников энергии и устойчивых практик становится все более важным в борьбе с изменением климата."
+    text: "Глобальные температуры продолжают расти, влияя на экосистемы по всему миру. Ученые предупреждают, что необходимы немедленные действия для предотвращения необратимого ущерба нашей планете. Внедрение возобновляемых источников энергии и устойчивых практик становится все бол��е важным в борьбе с изменением климата."
   },
   {
     id: 5,
@@ -36,6 +36,9 @@ export function SpeedReader() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [displayText, setDisplayText] = useState('');
   const [position, setPosition] = useState(0);
+  const [displayMode, setDisplayMode] = useState<'words' | 'scroll'>('words');
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [words, setWords] = useState<string[]>([]);
   
   // Предустановленные скорости
   const speedPresets = [
@@ -51,14 +54,36 @@ export function SpeedReader() {
   const timerRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    textRef.current = selectedText.text;
-    setPosition(0);
-    setDisplayText(textRef.current);
-  }, [selectedText]);
+    if (displayMode === 'words') {
+      // Разбиваем текст на слова при выборе нового текста
+      const newWords = selectedText.text.split(/\s+/);
+      setWords(newWords);
+      setCurrentWordIndex(0);
+    } else {
+      // Для режима бегущей строки
+      textRef.current = selectedText.text;
+      setPosition(0);
+      setDisplayText(textRef.current);
+    }
+  }, [selectedText, displayMode]);
 
   useEffect(() => {
-    if (isPlaying) {
+    if (!isPlaying) return;
+
+    if (displayMode === 'words') {
       const interval = (60 * 1000) / speed; // Конвертируем скорость в миллисекунды
+      
+      timerRef.current = setInterval(() => {
+        setCurrentWordIndex(prev => {
+          if (prev >= words.length - 1) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, interval);
+    } else {
+      const interval = (60 * 1000) / speed;
       
       timerRef.current = setInterval(() => {
         setPosition(prev => {
@@ -76,18 +101,28 @@ export function SpeedReader() {
         clearInterval(timerRef.current);
       }
     };
-  }, [isPlaying, speed]);
+  }, [isPlaying, speed, words.length, displayMode]);
 
   const handlePlayPause = () => {
-    if (position >= textRef.current.length) {
-      setPosition(0);
+    if (displayMode === 'words') {
+      if (currentWordIndex >= words.length - 1) {
+        setCurrentWordIndex(0);
+      }
+    } else {
+      if (position >= textRef.current.length) {
+        setPosition(0);
+      }
     }
     setIsPlaying(!isPlaying);
   };
 
   const handleReset = () => {
     setIsPlaying(false);
-    setPosition(0);
+    if (displayMode === 'words') {
+      setCurrentWordIndex(0);
+    } else {
+      setPosition(0);
+    }
   };
 
   const handleSpeedPreset = (newSpeed: number) => {
@@ -101,6 +136,22 @@ export function SpeedReader() {
         <h1 className="text-2xl md:text-3xl font-bold text-center">
           Тренажер скорочтения
         </h1>
+
+        {/* Выбор режима отображения */}
+        <div className="w-full px-2 sm:px-4">
+          <label className="block mb-2 text-sm md:text-base">Режим отображения:</label>
+          <select
+            className="w-full p-2 md:p-3 border rounded dark:bg-gray-800 text-sm md:text-base"
+            value={displayMode}
+            onChange={(e) => {
+              setIsPlaying(false);
+              setDisplayMode(e.target.value as 'words' | 'scroll');
+            }}
+          >
+            <option value="words">По словам</option>
+            <option value="scroll">Бегущая строка</option>
+          </select>
+        </div>
 
         {/* Выбор текста */}
         <div className="w-full px-2 sm:px-4">
@@ -166,15 +217,21 @@ export function SpeedReader() {
           ref={containerRef}
           className="w-full h-16 md:h-24 overflow-hidden bg-gray-100 dark:bg-gray-800 rounded-lg relative mx-2 sm:mx-4"
         >
-          <div 
-            className="whitespace-nowrap text-xl md:text-3xl font-medium p-4 md:p-6"
-            style={{
-              transform: `translateX(calc(-${position}ch))`,
-              transition: 'transform 0.1s linear'
-            }}
-          >
-            {displayText}
-          </div>
+          {displayMode === 'words' ? (
+            <div className="absolute inset-0 flex items-center justify-center text-xl md:text-3xl font-medium">
+              {words[currentWordIndex] || ''}
+            </div>
+          ) : (
+            <div 
+              className="whitespace-nowrap text-xl md:text-3xl font-medium p-4 md:p-6"
+              style={{
+                transform: `translateX(calc(-${position}ch))`,
+                transition: 'transform 0.1s linear'
+              }}
+            >
+              {displayText}
+            </div>
+          )}
         </div>
 
         {/* Кнопки управления */}
